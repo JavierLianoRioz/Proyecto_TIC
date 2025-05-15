@@ -41,22 +41,25 @@ stop_container() {
   docker rm "$CONTAINER_NAME"
 }
 
-# --- FUNCIÓN: métricas ---
+# --- FUNCIÓN: recoger métricas ---
 collect_metrics() {
   echo "📊 Recogiendo métricas de Docker..."
   docker stats "$CONTAINER_NAME" --no-stream --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}" > docker_minecraft_metrics.txt
   echo "📝 Métricas guardadas en 'docker_minecraft_metrics.txt'."
 }
 
+# --- FUNCIÓN: control de duración ---
+wait_duration() {
+  echo "⏳ Servidor corriendo durante $DURATION_MINUTES minutos..."
+  while [ "$(date +%s)" -lt "$END_TIME" ]; do
+    sleep 10
+  done
+}
+
 # --- EJECUCIÓN ---
 check_docker
 start_container
-
-echo "⏳ Servidor corriendo durante $DURATION_MINUTES minutos..."
-while [ "$(date +%s)" -lt "$END_TIME" ]; do
-  sleep 10
-done
-
+wait_duration
 collect_metrics
 stop_container
 
