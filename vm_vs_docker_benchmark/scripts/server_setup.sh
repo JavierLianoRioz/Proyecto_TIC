@@ -1,61 +1,35 @@
 #!/bin/bash
 
-# --- CONFIGURACIÓN ---
-VM_USER="usuario"
-VM_HOST="192.168.1.100"
-VM_MINECRAFT_PATH="/home/usuario/minecraft_server"
-LOCAL_DOCKER_NAME="minecraft_docker_test"
+# --- CONFIGURACIÓN GENERAL ---
 DURATION_MINUTES=30
-END_TIME=$(date -d "+$DURATION_MINUTES minutes" +%s)
+END_TIME=$(( $(date +%s) + DURATION_MINUTES * 60 ))
 
-# --- FUNCIONES ---
-start_vm_server() {
-  echo "🖥️ Iniciando servidor en VM..."
-  ssh "$VM_USER@$VM_HOST" "cd $VM_MINECRAFT_PATH && nohup java -Xms1G -Xmx2G -jar server.jar nogui > vm_output.log 2>&1 & echo \$! > vm_pid.txt"
-}
+# --- RUTAS A LOS SCRIPTS ---
+VM_SCRIPT="./vm_setup.sh"
+DOCKER_SCRIPT="./docker_setup.sh"
 
-stop_vm_server() {
-  echo "🛑 Deteniendo servidor en VM..."
-  ssh "$VM_USER@$VM_HOST" "kill \$(cat $VM_MINECRAFT_PATH/vm_pid.txt)"
-}
+# --- INICIAR VM Y DOCKER ---
+echo "🚀 Lanzando servidores Minecraft en paralelo (VM + Docker)..."
 
-start_docker_server() {
-  echo "🐳 Iniciando servidor en Docker..."
-  docker run -d --name "$LOCAL_DOCKER_NAME" -e EULA=TRUE -p 25566:25565 itzg/minecraft-server
-}
+# Lanzar el script de la VM en segundo plano
+bash "$VM_SCRIPT" &
+PID_VM=$!
 
-stop_docker_server() {
-  echo "🛑 Deteniendo servidor en Docker..."
-  docker stop "$LOCAL_DOCKER_NAME" && docker rm "$LOCAL_DOCKER_NAME"
-}
+# Lanzar el script de Docker en segundo plano
+bash "$DOCKER_SCRIPT" &
+PID_DOCKER=$!
 
-collect_metrics() {
-  echo "📊 Recopilando métricas..."
-
-  # VM Metrics
-  ssh "$VM_USER@$VM_HOST" "ps -C java -o %cpu,%mem,etime" > vm_metrics.txt
-
-  # Docker Metrics
-  docker stats --no-stream --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}" > docker_metrics.txt
-
-  echo "📄 Métricas guardadas en 'vm_metrics.txt' y 'docker_metrics.txt'."
-}
-
-# --- EJECUCIÓN ---
-
-echo "🚀 Comenzando test de comparación entre VM y Docker..."
-start_vm_server
-start_docker_server
-
-echo "🕒 Esperando $DURATION_MINUTES minutos..."
+# --- ESPERAR 30 MINUTOS ---
+echo "⏳ Esperando $DURATION_MINUTES minutos con ambos servidores en ejecución..."
 while [ "$(date +%s)" -lt "$END_TIME" ]; do
   sleep 10
 done
 
-echo "✅ Tiempo completado. Deteniendo servidores..."
-stop_vm_server
-stop_docker_server
+# --- FINALIZAR ---
+echo "🛑 Tiempo completado. Esperando a que los scripts terminen..."
 
-collect_metrics
+wait $PID_VM
+wait $PID_DOCKER
 
-echo "🏁 Prueba finalizada. ¡Métricas listas para analizar!"
+echo "✅ Ambos entornos detenidos y métricas recopiladas."
+echo "📁 Revisa los archivos 'vm_metrics.txt' y 'docker_minecraft_metrics.txt'."
